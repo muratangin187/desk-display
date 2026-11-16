@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Desk Display</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div id="app">
+    <div id="carousel-track">
+      <section class="view-slide" id="view-markets" data-view="markets"></section>
+      <section class="view-slide" id="view-photos" data-view="photos"></section>
+      <section class="view-slide" id="view-hn" data-view="hn"></section>
+    </div>
+
+    <div id="page-dots" aria-hidden="true">
+      <button class="dot active" data-index="0" title="Piyasalar"></button>
+      <button class="dot" data-index="1" title="Fotoğraflar"></button>
+      <button class="dot" data-index="2" title="Hacker News"></button>
+    </div>
+  </div>
+
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>

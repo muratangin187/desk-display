@@ -1,0 +1,9 @@
+<resources>
+    <style name="Theme.DeskDisplay" parent="Theme.AppCompat.NoActionBar">
+        <item name="android:windowBackground">#090C12</item>
+        <item name="android:colorBackground">#090C12</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowFullscreen">true</item>
+    </style>
+</resources>

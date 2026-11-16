@@ -2,12 +2,15 @@ package com.muratangin.deskdisplay
 
 import android.annotation.SuppressLint
 import android.graphics.Color
+import android.graphics.drawable.GradientDrawable
 import android.os.Build
 import android.os.Bundle
 import android.view.Gravity
+import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import android.view.WindowManager
+import android.webkit.CookieManager
 import android.webkit.JavascriptInterface
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
@@ -34,6 +37,9 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var rootLayout: FrameLayout
     private lateinit var webView: WebView
+    private var ytMusicContainer: FrameLayout? = null
+    private var ytMusicWebView: WebView? = null
+    private var currentViewIndex: Int = 0
     private var overlayContainer: FrameLayout? = null
     private var overlayWebView: WebView? = null
     private val ioExecutor = Executors.newCachedThreadPool()
@@ -125,6 +131,15 @@ class MainActivity : AppCompatActivity() {
                     closeOverlayBrowser()
                     return
                 }
+                if (currentViewIndex == 3) {
+                    val ytm = ytMusicWebView
+                    if (ytm != null && ytm.canGoBack()) {
+                        ytm.goBack()
+                    } else {
+                        webView.evaluateJavascript("window.__deskGoToView && window.__deskGoToView(2)", null)
+                    }
+                    return
+                }
                 webView.evaluateJavascript("window.__deskHandleBack ? window.__deskHandleBack() : false") { result ->
                     if (result != "true") {
                         // In kiosk/desk mode, keep app open unless user uses home/recents
@@ -159,6 +174,158 @@ class MainActivity : AppCompatActivity() {
         controller.systemBarsBehavior =
             WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
         controller.hide(WindowInsetsCompat.Type.systemBars())
+    }
+
+    @SuppressLint("SetJavaScriptEnabled", "ClickableViewAccessibility")
+    private fun ensureYtMusicView(): FrameLayout {
+        ytMusicContainer?.let { return it }
+
+        val container = FrameLayout(this).apply {
+            setBackgroundColor(Color.parseColor("#030303"))
+            keepScreenOn = true
+            translationX = (rootLayout.width.takeIf { it > 0 } ?: 1280).toFloat()
+        }
+
+        val ytm = WebView(this).apply {
+            setBackgroundColor(Color.parseColor("#030303"))
+            keepScreenOn = true
+            isVerticalScrollBarEnabled = false
+            isHorizontalScrollBarEnabled = false
+
+            CookieManager.getInstance().setAcceptCookie(true)
+            CookieManager.getInstance().setAcceptThirdPartyCookies(this, true)
+
+            settings.apply {
+                javaScriptEnabled = true
+                domStorageEnabled = true
+                databaseEnabled = true
+                mediaPlaybackRequiresUserGesture = false
+                mixedContentMode = WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE
+                useWideViewPort = true
+                loadWithOverviewMode = true
+                userAgentString =
+                    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
+            }
+
+            webChromeClient = WebChromeClient()
+            webViewClient = object : WebViewClient() {
+                override fun shouldOverrideUrlLoading(
+                    view: WebView?,
+                    request: WebResourceRequest?
+                ): Boolean {
+                    return false
+                }
+
+                override fun onPageFinished(view: WebView?, url: String?) {
+                    super.onPageFinished(view, url)
+                    if (url != null && url.contains("music.youtube.com")) {
+                        val injectCss = """
+                            (function() {
+                              if (document.getElementById('desk-ytm-clean')) return;
+                              var s = document.createElement('style');
+                              s.id = 'desk-ytm-clean';
+                              s.textContent = [
+                                'ytmusic-guide-renderer, #mini-guide, #guide-button, tp-yt-app-drawer#guide, ytmusic-mealbar-promo-renderer { display: none !important; }',
+                                'ytmusic-app-layout { --ytmusic-guide-width: 0px !important; }',
+                                '#nav-bar-background { left: 0 !important; }',
+                                'ytmusic-nav-bar { padding-left: 16px !important; }',
+                                '#browse-page, ytmusic-browse-response { margin-left: 0 !important; }',
+                                '::-webkit-scrollbar { width: 4px; height: 4px; }',
+                                '::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.18); border-radius: 4px; }'
+                              ].join('\n');
+                              document.head.appendChild(s);
+                            })();
+                        """.trimIndent()
+                        view?.evaluateJavascript(injectCss, null)
+                    }
+                }
+            }
+
+            var edgeStartX = 0f
+            var edgeTracking = false
+            setOnTouchListener { _, event ->
+                when (event.actionMasked) {
+                    MotionEvent.ACTION_DOWN -> {
+                        edgeStartX = event.x
+                        edgeTracking = event.x < 90f
+                    }
+                    MotionEvent.ACTION_MOVE -> {
+                        if (edgeTracking && event.x - edgeStartX > 110f) {
+                            edgeTracking = false
+                            webView.evaluateJavascript("window.__deskGoToView && window.__deskGoToView(2)", null)
+                            return@setOnTouchListener true
+                        }
+                    }
+                    MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                        edgeTracking = false
+                    }
+                }
+                false
+            }
+
+            loadUrl("https://music.youtube.com")
+        }
+
+        val backHandle = TextView(this).apply {
+            text = "‹"
+            setTextColor(Color.WHITE)
+            textSize = 18f
+            gravity = Gravity.CENTER
+            alpha = 0.55f
+            background = GradientDrawable().apply {
+                setColor(Color.parseColor("#B30F172A"))
+                cornerRadii = floatArrayOf(0f, 0f, 24f, 24f, 24f, 24f, 0f, 0f)
+                setStroke(1, Color.parseColor("#33FFFFFF"))
+            }
+            setOnClickListener {
+                webView.evaluateJavascript("window.__deskGoToView && window.__deskGoToView(2)", null)
+            }
+        }
+
+        container.addView(
+            ytm,
+            FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT
+            )
+        )
+        container.addView(
+            backHandle,
+            FrameLayout.LayoutParams(52, 96, Gravity.START or Gravity.CENTER_VERTICAL)
+        )
+
+        rootLayout.addView(
+            container,
+            FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT
+            )
+        )
+        ytMusicContainer = container
+        ytMusicWebView = ytm
+        return container
+    }
+
+    private fun setYtMusicVisible(visible: Boolean) {
+        runOnUiThread {
+            if (visible) {
+                val container = ensureYtMusicView()
+                container.bringToFront()
+                overlayContainer?.bringToFront()
+                container.animate()
+                    .translationX(0f)
+                    .setDuration(280)
+                    .start()
+            } else {
+                ytMusicContainer?.let { container ->
+                    val targetX = (rootLayout.width.takeIf { it > 0 } ?: 1280).toFloat()
+                    container.animate()
+                        .translationX(targetX)
+                        .setDuration(280)
+                        .start()
+                }
+            }
+        }
     }
 
     @SuppressLint("SetJavaScriptEnabled")
@@ -283,6 +450,12 @@ class MainActivity : AppCompatActivity() {
         @JavascriptInterface
         fun openWebPage(url: String) {
             openOverlayBrowser(url)
+        }
+
+        @JavascriptInterface
+        fun onViewChanged(index: Int) {
+            currentViewIndex = index
+            setYtMusicVisible(index == 3)
         }
 
         @JavascriptInterface

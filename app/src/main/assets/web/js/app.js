@@ -2,7 +2,7 @@ import { initMarketsView } from './views/markets.js';
 import { initPhotosView } from './views/photos.js';
 import { initHackerNewsView } from './views/hackernews.js';
 
-const TOTAL_VIEWS = 3;
+const TOTAL_VIEWS = 4;
 let currentView = Number(localStorage.getItem('desk_active_view') || 0);
 if (currentView < 0 || currentView >= TOTAL_VIEWS) currentView = 0;
 
@@ -28,7 +28,14 @@ function goToView(index, animate = true) {
   track.style.transform = `translate3d(-${currentView * 100}vw, 0, 0)`;
   dots.forEach((d, i) => d.classList.toggle('active', i === currentView));
   wakeDots();
+  if (window.DeskBridge && typeof window.DeskBridge.onViewChanged === 'function') {
+    window.DeskBridge.onViewChanged(currentView);
+  }
 }
+
+window.__deskGoToView = (index) => {
+  goToView(index, true);
+};
 
 dots.forEach((dot) => {
   dot.addEventListener('click', () => goToView(Number(dot.dataset.index)));

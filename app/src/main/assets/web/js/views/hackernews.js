@@ -1,4 +1,4 @@
-import { fetchJson, fetchText, openWebPage } from '../bridge.js';
+import { fetchJson, fetchText, fetchRenderedHtml, openWebPage } from '../bridge.js';
 
 export function initHackerNewsView(rootEl) {
   let stories = [];
@@ -165,7 +165,7 @@ export function initHackerNewsView(rootEl) {
       }
     });
 
-    return blocks.slice(0, 80).join('') || '<p>Bu sayfa okuyucu modunda metin döndürmedi. Sağ üstten "Tarayıcıda Aç" butonunu kullanabilirsiniz.</p>';
+    return blocks.slice(0, 80).join('');
   }
 
   async function renderDetailContent() {
@@ -187,7 +187,18 @@ export function initHackerNewsView(rootEl) {
       try {
         const html = await fetchText(s.url);
         if (currentStory !== s || activeTab !== 'reader') return;
-        detailBodyEl.innerHTML = `${headerHtml}<div class="hn-reader-content">${extractReadableHtml(html)}</div>`;
+        let readable = extractReadableHtml(html);
+
+        if (!readable || readable.length < 180) {
+          detailBodyEl.innerHTML = `${headerHtml}<div class="loading-state">Dinamik sayfa içeriği render ediliyor...</div>`;
+          const renderedHtml = await fetchRenderedHtml(s.url);
+          if (currentStory !== s || activeTab !== 'reader') return;
+          readable = extractReadableHtml(renderedHtml);
+        }
+
+        detailBodyEl.innerHTML = readable
+          ? `${headerHtml}<div class="hn-reader-content">${readable}</div>`
+          : `${headerHtml}<div class="loading-state">Bu sayfa okuyucu modunda metin döndürmedi. Sağ üstten "Tarayıcıda Aç ↗" butonunu kullanabilirsiniz.</div>`;
       } catch (err) {
         if (currentStory !== s || activeTab !== 'reader') return;
         detailBodyEl.innerHTML = `${headerHtml}<div class="loading-state">Okuyucu görünümü yüklenemedi (${escapeHtml(err.message)}). Sağ üstten "Tarayıcıda Aç" ile açabilirsiniz.</div>`;

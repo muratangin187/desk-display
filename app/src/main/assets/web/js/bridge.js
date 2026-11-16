@@ -30,6 +30,17 @@ export async function fetchJson(url) {
   return JSON.parse(text);
 }
 
+export async function fetchRenderedHtml(url) {
+  if (window.DeskBridge && typeof window.DeskBridge.extractRenderedHtml === 'function') {
+    const requestId = `render_${++seq}_${Date.now()}`;
+    return new Promise((resolve, reject) => {
+      pendingRequests.set(requestId, { resolve, reject });
+      window.DeskBridge.extractRenderedHtml(requestId, url);
+    });
+  }
+  return fetchText(url);
+}
+
 export function openWebPage(url) {
   if (window.DeskBridge && typeof window.DeskBridge.openWebPage === 'function') {
     window.DeskBridge.openWebPage(url);

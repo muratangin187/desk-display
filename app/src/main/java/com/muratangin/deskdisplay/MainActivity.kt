@@ -284,5 +284,57 @@ class MainActivity : AppCompatActivity() {
         fun openWebPage(url: String) {
             openOverlayBrowser(url)
         }
+
+        @JavascriptInterface
+        fun extractRenderedHtml(requestId: String, targetUrl: String) {
+            runOnUiThread {
+                val tempWebView = WebView(this@MainActivity).apply {
+                    visibility = View.INVISIBLE
+                    settings.apply {
+                        javaScriptEnabled = true
+                        domStorageEnabled = true
+                        loadsImagesAutomatically = false
+                        blockNetworkImage = true
+                    }
+                }
+                var finished = false
+                fun cleanupAndResolve(ok: Boolean, bodyOrErr: String) {
+                    if (finished) return
+                    finished = true
+                    rootLayout.removeView(tempWebView)
+                    tempWebView.destroy()
+                    val payload = JSONObject().apply {
+                        put("ok", ok)
+                        if (ok) put("body", bodyOrErr) else put("error", bodyOrErr)
+                    }
+                    val jsCall = "window.__deskBridgeResolve(${JSONObject.quote(requestId)}, $payload)"
+                    webView.evaluateJavascript(jsCall, null)
+                }
+
+                tempWebView.webViewClient = object : WebViewClient() {
+                    override fun onPageFinished(view: WebView?, url: String?) {
+                        view?.postDelayed({
+                            if (finished) return@postDelayed
+                            view.evaluateJavascript("document.documentElement.outerHTML") { raw ->
+                                val decoded = try {
+                                    if (raw == null || raw == "null") ""
+                                    else org.json.JSONTokener(raw).nextValue() as? String ?: ""
+                                } catch (_: Exception) {
+                                    ""
+                                }
+                                cleanupAndResolve(decoded.isNotEmpty(), decoded.ifEmpty { "Empty rendered HTML" })
+                            }
+                        }, 2500L)
+                    }
+                }
+
+                rootLayout.addView(tempWebView, FrameLayout.LayoutParams(1280, 800))
+                tempWebView.loadUrl(targetUrl)
+
+                tempWebView.postDelayed({
+                    cleanupAndResolve(false, "Render timeout")
+                }, 12000L)
+            }
+        }
     }
 }
